@@ -1,0 +1,16 @@
+Changes
+Makefile.PL
+MANIFEST
+ppport.h
+README
+t/HiRedis-Driver.t
+lib/HiRedis/Driver.pm
+Driver.xs
+fmacros.h
+hiredis.c
+hiredis.h
+net.c
+net.h
+sds.c
+sds.h
+util.h
