@@ -1,0 +1,2 @@
+TYPEMAP
+HiRedis::DriverXS     T_PTROBJ
