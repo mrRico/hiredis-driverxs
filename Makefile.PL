@@ -1,8 +1,8 @@
 use ExtUtils::MakeMaker;
 
 WriteMakefile(
-    NAME              => 'HiRedis::DriverXS',
-    VERSION_FROM      => 'lib/HiRedis/DriverXS.pm',
+    NAME              => 'HiRedis::Driver',
+    VERSION_FROM      => 'lib/HiRedis/Driver.pm',
     PREREQ_PM         => {
         Test::Requires => 0, 
         Test::More => 0, 
@@ -11,9 +11,9 @@ WriteMakefile(
         ExtUtils::MakeMaker => 0, 
         Devel::PPPort => 0
     },
-    DISTNAME        => 'HiRedis-DriverXS',
+    DISTNAME        => 'HiRedis-Driver',
     LICENSE         => 'perl',  
-    ABSTRACT_FROM  => 'lib/HiRedis/DriverXS.pm', 
+    ABSTRACT_FROM  => 'lib/HiRedis/Driver.pm', 
     AUTHOR         => 'Sivirinov Ivan <catamoose at yandex.ru>',
     LIBS              => [''],
     DEFINE            => '',
@@ -23,7 +23,7 @@ WriteMakefile(
             repository => 'https://mrRico@github.com/mrRico/hiredis-driverxs.git',
         }
     },
-    OBJECT          => 'DriverXS.o hiredis.o net.o sds.o',
-    C               => ['DriverXS.c'],
+    OBJECT          => 'Driver.o hiredis.o net.o sds.o',
+    C               => ['Driver.c'],
     OPTIMIZE        => $ENV{'OPTIMIZE'}
 );

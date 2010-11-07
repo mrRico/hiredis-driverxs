@@ -12,7 +12,7 @@
 #define RES_QUEUE "QUEUED"
 
 #define C_PACKAGE_DEBUG 1
-#define C_PACKAGE_ERROR "HiRedis::DriverXS: %s"
+#define C_PACKAGE_ERROR "HiRedis::Driver: %s"
 #define C_MAX_TRANSACTION_CNT 500000
 
 /*
@@ -58,20 +58,20 @@ typedef struct st_rdxs_obj {
 		short int transaction;
 		char* (*fn_list[C_MAX_TRANSACTION_CNT])(char*);
         RDXS_connect_info *connect_info;
-} *HiRedis__DriverXS;
+} *HiRedis__Driver;
 
 /*
  * describe function -------------------------------------
  */
 static void _debug_type(redisReply* reply);
-void c_DESTROY(HiRedis__DriverXS obj);
-void c_reconnect(HiRedis__DriverXS obj);
-int  c_ping(HiRedis__DriverXS obj);
-int  c_quit(HiRedis__DriverXS obj);
-int  c_multi(HiRedis__DriverXS obj);
-int  c_exec(HiRedis__DriverXS obj);
-SV*  c_get(HiRedis__DriverXS obj, char* key);
-int  c_set(HiRedis__DriverXS obj, char* key, char* value);
+void c_DESTROY(HiRedis__Driver obj);
+void c_reconnect(HiRedis__Driver obj);
+int  c_ping(HiRedis__Driver obj);
+int  c_quit(HiRedis__Driver obj);
+int  c_multi(HiRedis__Driver obj);
+int  c_exec(HiRedis__Driver obj);
+SV*  c_get(HiRedis__Driver obj, char* key);
+int  c_set(HiRedis__Driver obj, char* key, char* value);
 //char* eee(char* ret);
 
 /*
@@ -103,7 +103,7 @@ _debug_type(redisReply* reply) {
 }
 
 void
-c_reconnect(HiRedis__DriverXS obj) {
+c_reconnect(HiRedis__Driver obj) {
 	obj->error = NULL;
 	if (!obj->connect_info->host) {
 		obj->error = "'host' not defined, when call connect";
@@ -127,7 +127,7 @@ c_reconnect(HiRedis__DriverXS obj) {
 //}
 
 int
-c_ping(HiRedis__DriverXS obj) {
+c_ping(HiRedis__Driver obj) {
 	redisReply* reply = redisCommand(obj->c,"PING");
 	C_RECONNECT_IF_ERROR(c_ping(obj));
 	int ret = (reply->type == REDIS_REPLY_STATUS && C_REPLY_EQ(RES_PING)) ? 1 : 0;
@@ -136,12 +136,12 @@ c_ping(HiRedis__DriverXS obj) {
 }
 
 int
-c_quit(HiRedis__DriverXS obj) {
+c_quit(HiRedis__Driver obj) {
 	C_CONNECT_FREE();
 	return 1;
 }
 
-//static int c_multi_res(HiRedis__DriverXS obj, redisReply* reply) {
+//static int c_multi_res(HiRedis__Driver obj, redisReply* reply) {
 //	if (
 //			reply->type == REDIS_REPLY_STATUS &&
 //			(
@@ -155,7 +155,7 @@ c_quit(HiRedis__DriverXS obj) {
 //	}
 //}
 int
-c_multi(HiRedis__DriverXS obj) {
+c_multi(HiRedis__Driver obj) {
 	redisReply* reply = redisCommand(obj->c,"MULTI");
 	C_RECONNECT_IF_ERROR(c_multi(obj));
 	int ret = (reply->type == REDIS_REPLY_STATUS && C_REPLY_EQ(RES_OK)) ? 1 : 0;
@@ -165,7 +165,7 @@ c_multi(HiRedis__DriverXS obj) {
 }
 
 int
-c_exec(HiRedis__DriverXS obj) {
+c_exec(HiRedis__Driver obj) {
 	redisReply* reply = redisCommand(obj->c,"EXEC");
 	C_RECONNECT_IF_ERROR(c_exec(obj));
 	unsigned int j;
@@ -187,7 +187,7 @@ c_exec(HiRedis__DriverXS obj) {
 }
 
 SV*
-c_get(HiRedis__DriverXS obj, char* key) {
+c_get(HiRedis__Driver obj, char* key) {
 	redisReply* reply = redisCommand(obj->c,"GET %s",key);
 	C_RECONNECT_IF_ERROR(c_get(obj,key));
 	SV* ret;
@@ -242,7 +242,7 @@ c_get(HiRedis__DriverXS obj, char* key) {
 }
 
 int
-c_set(HiRedis__DriverXS obj, char* key, char* value) {
+c_set(HiRedis__Driver obj, char* key, char* value) {
 	redisReply* reply = redisCommand(obj->c,"SET %s %s",key,value);
 	C_RECONNECT_IF_ERROR(c_set(obj,key,value));
 	int ret = strcasecmp(reply->str,RES_OK) == 0 ? 1 : 0;
@@ -251,7 +251,7 @@ c_set(HiRedis__DriverXS obj, char* key, char* value) {
 }
 
 void
-c_DESTROY(HiRedis__DriverXS obj) {
+c_DESTROY(HiRedis__Driver obj) {
 	free(obj->connect_info);
 	obj->connect_info = NULL;
 	if(obj->c != NULL) {

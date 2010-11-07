@@ -6,6 +6,7 @@ README
 t/HiRedis-Driver.t
 lib/HiRedis/Driver.pm
 Driver.xs
+Driver.h
 fmacros.h
 hiredis.c
 hiredis.h
