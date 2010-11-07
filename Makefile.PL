@@ -13,7 +13,7 @@ WriteMakefile(
     },
     DISTNAME        => 'HiRedis-Driver',
     LICENSE         => 'perl',  
-    ABSTRACT_FROM  => 'lib/HiRedis/Driver.pm', 
+    #ABSTRACT_FROM  => 'lib/HiRedis/Driver.pm', 
     AUTHOR         => 'Sivirinov Ivan <catamoose at yandex.ru>',
     LIBS              => [''],
     DEFINE            => '',
