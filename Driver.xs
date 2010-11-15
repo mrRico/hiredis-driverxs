@@ -28,7 +28,7 @@ rdxs_connect(class, host, port=6379)
     OUTPUT:
         RETVAL
 
-int
+SV*
 rdxs_ping(HiRedis::Driver obj)
     CODE:
         {
@@ -55,7 +55,7 @@ rdxs_multi(HiRedis::Driver obj)
     OUTPUT:
         RETVAL
 
-int
+SV*
 rdxs_exec(HiRedis::Driver obj)
     CODE:
         {

@@ -10,10 +10,10 @@
 #define RES_PING "PONG"
 #define RES_OK "OK"
 #define RES_QUEUE "QUEUED"
+#define RES_MULTI_ERROR "ERR EXEC without MULTI"
 
 #define C_PACKAGE_DEBUG 1
 #define C_PACKAGE_ERROR "HiRedis::Driver: %s"
-#define C_MAX_TRANSACTION_CNT 500000
 
 /*
  * macro definition -------------------------------------
@@ -36,14 +36,6 @@
 	redisFree(obj->c); \
 	obj->c = NULL;
 
-// flush transaction
-#define C_SKIP_TRANSACTION() \
-    obj->transaction = 0; \
-	memset(obj->fn_list, 0, C_MAX_TRANSACTION_CNT);
-
-// string reply eq
-#define C_REPLY_EQ(possible_answer) (!strcasecmp(reply->str,possible_answer) || !strcasecmp(reply->str,RES_QUEUE))
-
 /*
  * type definition --------------------------------------
  */
@@ -55,8 +47,6 @@ typedef struct st_rdxs_connect_info {
 typedef struct st_rdxs_obj {
 		redisContext* c;
 		char* error;
-		short int transaction;
-		char* (*fn_list[C_MAX_TRANSACTION_CNT])(char*);
         RDXS_connect_info *connect_info;
 } *HiRedis__Driver;
 
@@ -66,13 +56,12 @@ typedef struct st_rdxs_obj {
 static void _debug_type(redisReply* reply);
 void c_DESTROY(HiRedis__Driver obj);
 void c_reconnect(HiRedis__Driver obj);
-int  c_ping(HiRedis__Driver obj);
+SV*  c_ping(HiRedis__Driver obj);
 int  c_quit(HiRedis__Driver obj);
 int  c_multi(HiRedis__Driver obj);
-int  c_exec(HiRedis__Driver obj);
+SV*  c_exec(HiRedis__Driver obj);
 SV*  c_get(HiRedis__Driver obj, char* key);
 int  c_set(HiRedis__Driver obj, char* key, char* value);
-//char* eee(char* ret);
 
 /*
  * function definition ------------------------------------
@@ -115,22 +104,59 @@ c_reconnect(HiRedis__Driver obj) {
     	C_CONNECT_FREE();
     	C_CROAK();
     };
-    C_SKIP_TRANSACTION();
-
-//    (obj->fn_stack)[0] = &eee;
-//    printf("TEST %s\n",(char*)((obj->fn_stack)[0])("drdr"));
 }
 
-//char*
-//eee(char* ret) {
-//	return ret;
-//}
+SV*
+c_response(redisReply* reply) {
+	SV* ret;
+	AV* ret_array;
+	unsigned int j;
 
-int
+    switch(reply->type) {
+    case REDIS_REPLY_STATUS:
+		if (!strcasecmp(reply->str,RES_PING)) {
+			ret = newSViv(1);
+			break;
+		} else if (!strcasecmp(reply->str,RES_QUEUE)) {
+			ret = newSViv(1);
+			break;
+		} else if (!strcasecmp(reply->str,RES_OK)) {
+			ret = newSViv(1);
+			break;
+		}
+    case REDIS_REPLY_ERROR:
+    	if (!strcasecmp(reply->str,RES_MULTI_ERROR)) {
+    		ret = newSV(0);
+    		break;
+    	}
+    case REDIS_REPLY_INTEGER:
+    	ret = newSViv(reply->integer);
+    	break;
+    case REDIS_REPLY_STRING:
+    	ret = newSVpvn(reply->str,strlen(reply->str));
+    	break;
+    case REDIS_REPLY_ARRAY:
+    	ret_array = newAV();
+        for (j = 0; j < reply->elements; j++) {
+        	av_push(ret_array,c_response(reply->element[j]));
+        }
+        ret = newRV_inc((SV*)ret_array);
+        break;
+    default:
+    	ret = newSViv(0);
+    }
+
+	return ret;
+}
+
+
+SV*
 c_ping(HiRedis__Driver obj) {
 	redisReply* reply = redisCommand(obj->c,"PING");
 	C_RECONNECT_IF_ERROR(c_ping(obj));
-	int ret = (reply->type == REDIS_REPLY_STATUS && C_REPLY_EQ(RES_PING)) ? 1 : 0;
+
+	SV* ret = c_response(reply);
+
 	freeReplyObject(reply);
 	return ret;
 }
@@ -141,102 +167,31 @@ c_quit(HiRedis__Driver obj) {
 	return 1;
 }
 
-//static int c_multi_res(HiRedis__Driver obj, redisReply* reply) {
-//	if (
-//			reply->type == REDIS_REPLY_STATUS &&
-//			(
-//					(obj->transaction && C_EQ(reply->str,RES_QUEUE)) ||
-//					(!obj->transaction && C_EQ(reply->str,RES_OK))
-//			)
-//	) {
-//		;
-//	} else {
-//
-//	}
-//}
 int
 c_multi(HiRedis__Driver obj) {
 	redisReply* reply = redisCommand(obj->c,"MULTI");
 	C_RECONNECT_IF_ERROR(c_multi(obj));
 	int ret = (reply->type == REDIS_REPLY_STATUS && C_REPLY_EQ(RES_OK)) ? 1 : 0;
-	if (ret) obj->transaction = 1;
 	freeReplyObject(reply);
 	return ret;
 }
 
-int
+SV*
 c_exec(HiRedis__Driver obj) {
 	redisReply* reply = redisCommand(obj->c,"EXEC");
 	C_RECONNECT_IF_ERROR(c_exec(obj));
-	unsigned int j;
-    if (reply->type == REDIS_REPLY_ARRAY) {
-        for (j = 0; j < reply->elements; j++) {
-        	_debug_type(reply->element[j]);
-            printf("%u) %s\n", j, reply->element[j]->str);
-        }
-    } else {
-    	_debug_type(reply);
-//    	Current reply type is REDIS_REPLY_ERROR
-//    	Reply response string: ERR EXEC without MULTI
 
-    }
+	SV* ret = c_response(reply);
 
-	//int ret = strcasecmp(reply->str,RES_OK) == 0 ? 1 : 0;
 	freeReplyObject(reply);
-	return 1;
+	return ret;
 }
 
 SV*
 c_get(HiRedis__Driver obj, char* key) {
 	redisReply* reply = redisCommand(obj->c,"GET %s",key);
 	C_RECONNECT_IF_ERROR(c_get(obj,key));
-	SV* ret;
-	printf("type %d\n",reply->type);
-    switch(reply->type) {
-    case REDIS_REPLY_ERROR:
-    	printf("1\n");
-    	break;
-    case REDIS_REPLY_STATUS:
-    	// queue
-    	printf("2\n");
-    	ret = newSVpvn("",0);
-    	break;
-    case REDIS_REPLY_INTEGER:
-    	printf("3\n");
-    	break;
-    case REDIS_REPLY_STRING:
-    	// succefull answer
-    	printf("4\n");
-    	ret = newSVpvn(reply->str,strlen(reply->str));
-    	break;
-    case REDIS_REPLY_ARRAY:
-    	printf("5\n");
-    	break;
-    default:
-    	printf("6\n");
-    	// no key
-    	ret = NULL;
-    }
-
-
-//    if(reply->type == REDIS_REPLY_STRING) {
-//    	ret = newSVpvn(reply->str,strlen(reply->str));
-//    } else if (reply->type == REDIS_REPLY_ERROR) {
-//    	printf("Error1\n");
-//    	if (obj->c->errstr != NULL) {
-//    		sprintf(obj->error,"Redis::DriverXS: %s",obj->c->errstr);
-//    	} else {
-//    		sprintf(obj->error,"Redis::DriverXS: unknown error in 'get'");
-//    	};
-//    	printf("Error2\n");
-//    	ret = NULL;
-//    } else {
-//    	obj->error = NULL;
-//    	printf("Error3\n");
-//    	obj->error = "Redis::DriverXS: unknown error in 'get'";
-//    	printf("Error4\n");
-//    	ret = NULL;
-//    };
+	SV* ret = c_response(reply);
 	freeReplyObject(reply);
 	return ret;
 }
