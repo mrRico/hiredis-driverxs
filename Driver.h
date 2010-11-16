@@ -7,10 +7,14 @@
 #include <string.h>
 #include "hiredis.h"
 
-#define RES_PING "PONG"
-#define RES_OK "OK"
-#define RES_QUEUE "QUEUED"
+#define RES_STATUS_PING "PONG"
+#define RES_STATUS_QUEUE "QUEUED"
+#define RES_STATUS_OK "OK"
+
 #define RES_MULTI_ERROR "ERR EXEC without MULTI"
+
+#define RES_UNDEF "0E0"
+#define RES_EMPTY_STR "0E00"
 
 #define C_PACKAGE_DEBUG 1
 #define C_PACKAGE_ERROR "HiRedis::Driver: %s"
@@ -28,9 +32,6 @@
 		}; \
 		if (C_PACKAGE_DEBUG) _debug_type(reply);
 
-// croak macros
-#define C_CROAK() croak(C_PACKAGE_ERROR,obj->error)
-
 // connect free
 #define C_CONNECT_FREE() \
 	redisFree(obj->c); \
@@ -39,14 +40,13 @@
 /*
  * type definition --------------------------------------
  */
-typedef struct st_rdxs_connect_info {
+typedef struct st_hdr_connect_info {
     char *host;
     unsigned int port;
 } RDXS_connect_info;
 
-typedef struct st_rdxs_obj {
+typedef struct st_hdr_obj {
 		redisContext* c;
-		char* error;
         RDXS_connect_info *connect_info;
 } *HiRedis__Driver;
 
@@ -54,20 +54,22 @@ typedef struct st_rdxs_obj {
  * describe function -------------------------------------
  */
 static void _debug_type(redisReply* reply);
-void c_DESTROY(HiRedis__Driver obj);
+SV*  c_response(redisReply* reply);
 void c_reconnect(HiRedis__Driver obj);
-SV*  c_ping(HiRedis__Driver obj);
 int  c_quit(HiRedis__Driver obj);
-int  c_multi(HiRedis__Driver obj);
-SV*  c_exec(HiRedis__Driver obj);
-SV*  c_get(HiRedis__Driver obj, char* key);
-int  c_set(HiRedis__Driver obj, char* key, char* value);
+SV*  c_command(HiRedis__Driver obj, char* cmd, char* param[], int len);
+void c_DESTROY(HiRedis__Driver obj);
 
 /*
  * function definition ------------------------------------
  */
+
+/*
+ * debug helper
+ */
 static void
 _debug_type(redisReply* reply) {
+	printf("*********\n");
 	printf("Current reply type is ");
     switch(reply->type) {
     case REDIS_REPLY_ERROR:
@@ -89,23 +91,12 @@ _debug_type(redisReply* reply) {
     	printf("DEFAULT\n");
     };
     printf("Reply response string: %s\n",reply->str);
+    printf("*********\n");
 }
 
-void
-c_reconnect(HiRedis__Driver obj) {
-	obj->error = NULL;
-	if (!obj->connect_info->host) {
-		obj->error = "'host' not defined, when call connect";
-		C_CROAK();
-	};
-	obj->c = redisConnect(obj->connect_info->host, obj->connect_info->port);
-    if (obj->c->err != 0) {
-    	obj->error = obj->c->errstr;
-    	C_CONNECT_FREE();
-    	C_CROAK();
-    };
-}
-
+/*
+ * response processor
+ */
 SV*
 c_response(redisReply* reply) {
 	SV* ret;
@@ -114,97 +105,125 @@ c_response(redisReply* reply) {
 
     switch(reply->type) {
     case REDIS_REPLY_STATUS:
-		if (!strcasecmp(reply->str,RES_PING)) {
+		if (!strcasecmp(reply->str,RES_STATUS_PING)) {
 			ret = newSViv(1);
-			break;
-		} else if (!strcasecmp(reply->str,RES_QUEUE)) {
+		} else if (!strcasecmp(reply->str,RES_STATUS_QUEUE)) {
 			ret = newSViv(1);
-			break;
-		} else if (!strcasecmp(reply->str,RES_OK)) {
+		} else if (!strcasecmp(reply->str,RES_STATUS_OK)) {
 			ret = newSViv(1);
-			break;
+		} else {
+			ret = newSVpvn(reply->str,strlen(reply->str));
 		}
+		break;
     case REDIS_REPLY_ERROR:
     	if (!strcasecmp(reply->str,RES_MULTI_ERROR)) {
+    		// non fatal error
     		ret = newSV(0);
-    		break;
+    	} else {
+    		// ERR wrong number of arguments for 'set' command
+    		// unkown error
+    		croak("Unknown REDIS_REPLY_ERROR case. Hiredis reply: %s",reply->str);
     	}
+    	break;
     case REDIS_REPLY_INTEGER:
     	ret = newSViv(reply->integer);
     	break;
     case REDIS_REPLY_STRING:
-    	ret = newSVpvn(reply->str,strlen(reply->str));
+    	if (!strcasecmp(reply->str,RES_UNDEF)) {
+    		ret = newSV(0);
+    	} else if (!strcasecmp(reply->str,RES_EMPTY_STR)) {
+    		ret = newSVpvn("",strlen(""));
+    	} else {
+			ret = newSVpvn(reply->str,strlen(reply->str));
+    	}
     	break;
     case REDIS_REPLY_ARRAY:
     	ret_array = newAV();
         for (j = 0; j < reply->elements; j++) {
         	av_push(ret_array,c_response(reply->element[j]));
         }
-        ret = newRV_inc((SV*)ret_array);
+        ret = newRV_noinc((SV*)ret_array);
         break;
     default:
-    	ret = newSViv(0);
+    	ret = newSV(0);
     }
 
 	return ret;
 }
 
-
-SV*
-c_ping(HiRedis__Driver obj) {
-	redisReply* reply = redisCommand(obj->c,"PING");
-	C_RECONNECT_IF_ERROR(c_ping(obj));
-
-	SV* ret = c_response(reply);
-
-	freeReplyObject(reply);
-	return ret;
+/*
+ * reconnect
+ */
+void
+c_reconnect(HiRedis__Driver obj) {
+	if (!obj->connect_info->host) {
+		croak(C_PACKAGE_ERROR,"'host' not defined, when call connect");
+	};
+	obj->c = redisConnect(obj->connect_info->host, obj->connect_info->port);
+    if (obj->c->err != 0) {
+    	char* error = obj->c->errstr;
+    	C_CONNECT_FREE();
+    	croak(C_PACKAGE_ERROR,error);
+    };
 }
 
+/*
+ * quit
+ */
 int
 c_quit(HiRedis__Driver obj) {
+	if (obj->c == NULL) return 1;
 	C_CONNECT_FREE();
 	return 1;
 }
 
-int
-c_multi(HiRedis__Driver obj) {
-	redisReply* reply = redisCommand(obj->c,"MULTI");
-	C_RECONNECT_IF_ERROR(c_multi(obj));
-	int ret = (reply->type == REDIS_REPLY_STATUS && C_REPLY_EQ(RES_OK)) ? 1 : 0;
-	freeReplyObject(reply);
-	return ret;
-}
 
+/*
+ * Main command-function for hiredis interface
+ * 1. Create format string, like so "SET %s %s"
+ * 2. Call hiredis and getting redisReply pointer
+ * 3. If redis return error of connection, reconnect
+ * 4. Create return scalar value
+ */
 SV*
-c_exec(HiRedis__Driver obj) {
-	redisReply* reply = redisCommand(obj->c,"EXEC");
-	C_RECONNECT_IF_ERROR(c_exec(obj));
-
-	SV* ret = c_response(reply);
-
-	freeReplyObject(reply);
-	return ret;
+c_command(HiRedis__Driver obj, char* cmd, char* param[], int len) {
+	// 1. Create format string, like so "SET %s %s"
+	int siz = strlen(cmd)+strlen(" %s")*len;
+	char format[siz];
+	memset(format, 0, sizeof(format));
+	strcat(format,cmd);
+	unsigned int j;
+	for (j = 0; j < len; j++) {
+	  	strcat(format," %s");
+	};
+	// debug printf format and argument
+	if (C_PACKAGE_DEBUG) {
+		printf("*********\n");
+		printf("%s\n",(char*)format);
+		unsigned int j;
+        for (j = 0; j < len; j++) {
+        	printf("%d) %s\n",j,param[j]);
+        };
+        printf("*********\n");
+	}
+	// 2. Call hiredis and getting redisReply pointer
+	redisReply* reply = redisvCommand(obj->c,(char*)format,(va_list)param);
+	// 3. If redis return error of connection, reconnect
+	if (obj->c->errstr) {
+		c_reconnect(obj);
+		return c_command(obj,cmd,param,len);
+	};
+	// print some debug info if C_PACKAGE_DEBUG is true
+	if (C_PACKAGE_DEBUG) _debug_type(reply);
+	// 4. Create return scalar value
+    SV* ret = c_response(reply);
+    freeReplyObject(reply);
+    return ret;
 }
 
-SV*
-c_get(HiRedis__Driver obj, char* key) {
-	redisReply* reply = redisCommand(obj->c,"GET %s",key);
-	C_RECONNECT_IF_ERROR(c_get(obj,key));
-	SV* ret = c_response(reply);
-	freeReplyObject(reply);
-	return ret;
-}
-
-int
-c_set(HiRedis__Driver obj, char* key, char* value) {
-	redisReply* reply = redisCommand(obj->c,"SET %s %s",key,value);
-	C_RECONNECT_IF_ERROR(c_set(obj,key,value));
-	int ret = strcasecmp(reply->str,RES_OK) == 0 ? 1 : 0;
-	freeReplyObject(reply);
-	return ret;
-}
-
+/*
+ * destroy with disconnect
+ */
 void
 c_DESTROY(HiRedis__Driver obj) {
 	free(obj->connect_info);
