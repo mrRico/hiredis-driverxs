@@ -16,7 +16,7 @@
 #define RES_UNDEF "0E0"
 #define RES_EMPTY_STR "0E00"
 
-#define C_PACKAGE_DEBUG 1
+#define C_PACKAGE_DEBUG 0
 #define C_PACKAGE_ERROR "HiRedis::Driver: %s"
 
 /*

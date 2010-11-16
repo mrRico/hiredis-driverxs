@@ -1216,6 +1216,59 @@ hdr_config_set(HiRedis::Driver obj, ...)
     OUTPUT:
         RETVAL
 
+# Publish/Subscribe -------------------------------------
+
+SV*
+hdr_subscribe(HiRedis::Driver obj, ...)
+    INIT:
+        HDR_HAVE_MORE_THEN_ARG(1);
+    CODE:
+        {
+            HDR_WITH_ARG("SUBSCRIBE");
+        }
+    OUTPUT:
+        RETVAL
+
+SV*
+hdr_unsubscribe(HiRedis::Driver obj, ...)
+    CODE:
+        {
+            HDR_WITH_ARG("UNSUBSCRIBE");
+        }
+    OUTPUT:
+        RETVAL
+
+SV*
+hdr_psubscribe(HiRedis::Driver obj, ...)
+    INIT:
+        HDR_HAVE_MORE_THEN_ARG(1);
+    CODE:
+        {
+            HDR_WITH_ARG("PSUBSCRIBE");
+        }
+    OUTPUT:
+        RETVAL
+
+SV*
+hdr_punsubscribe(HiRedis::Driver obj, ...)
+    CODE:
+        {
+            HDR_WITH_ARG("PUNSUBSCRIBE");
+        }
+    OUTPUT:
+        RETVAL
+
+SV*
+hdr_publish(HiRedis::Driver obj, ...)
+    INIT:
+        HDR_CNT_ARG_OR_UNDEF(2);
+    CODE:
+        {
+            HDR_WITH_ARG("PUBLISH");
+        }
+    OUTPUT:
+        RETVAL
+
 
 void
 hdr_DESTROY(HiRedis::Driver obj)
