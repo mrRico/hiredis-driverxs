@@ -57,6 +57,7 @@ static void _debug_type(redisReply* reply);
 SV*  c_response(redisReply* reply);
 void c_reconnect(HiRedis__Driver obj);
 int  c_quit(HiRedis__Driver obj);
+short int c_shutdown(HiRedis__Driver obj);
 SV*  c_command(HiRedis__Driver obj, char* cmd, char* param[], int len);
 void c_DESTROY(HiRedis__Driver obj);
 
@@ -177,6 +178,17 @@ c_quit(HiRedis__Driver obj) {
 	return 1;
 }
 
+/*
+ * shutdown
+ */
+short int
+c_shutdown(HiRedis__Driver obj) {
+	if (obj->c == NULL) return 0;
+	redisReply* reply = redisCommand(obj->c,"SHUTDOWN");
+	if(reply != NULL) freeReplyObject(reply);
+	C_CONNECT_FREE();
+	return 1;
+}
 
 /*
  * Main command-function for hiredis interface
