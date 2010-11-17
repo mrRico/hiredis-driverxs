@@ -1,2 +1,5 @@
 Revision history for Perl extension HiRedis::Driver.
 
+17.11.2010
+    First working version of the driver.
+    Tests on developer server are succefull.
