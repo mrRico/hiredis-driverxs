@@ -81,6 +81,13 @@ sub config_get {
     return $ret;
 }
 
+sub hgetall {
+    my $ret = shift->_hgetall(shift);
+    return undef unless $ret;
+    $ret = {@$ret};
+    return $ret;
+}
+
 # internal interface -------------------------------
 # Perl is better, when we need prepare many incoming arguments for C function
 

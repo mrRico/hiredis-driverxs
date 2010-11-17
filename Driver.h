@@ -117,14 +117,15 @@ c_response(redisReply* reply) {
 		}
 		break;
     case REDIS_REPLY_ERROR:
-    	if (!strcasecmp(reply->str,RES_MULTI_ERROR)) {
-    		// non fatal error
-    		ret = newSV(0);
-    	} else {
-    		// ERR wrong number of arguments for 'set' command
-    		// unkown error
-    		croak("Unknown REDIS_REPLY_ERROR case. Hiredis reply: %s",reply->str);
-    	}
+//    	if (!strcasecmp(reply->str,RES_MULTI_ERROR)) {
+//    		// non fatal error
+//    		ret = newSV(0);
+//    	} else {
+//    		// ERR wrong number of arguments for 'set' command
+//    		// unkown error
+//    		croak("Unknown REDIS_REPLY_ERROR case. Hiredis reply: %s",reply->str);
+//    	}
+    	ret = newSV(0);
     	break;
     case REDIS_REPLY_INTEGER:
     	ret = newSViv(reply->integer);

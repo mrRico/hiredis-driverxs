@@ -50,13 +50,14 @@
  */
 short int
 check_number(char* test) {
-    if(!strlen(test)) return 0;
-    unsigned int j = 0;
+    short int ret = 0;
+    if(!strlen(test) || (strlen(test)==1 && !isdigit(test[0]))) return ret;
+    unsigned int j = (test[0]=='-' ? 1 : 0);
     while(test[j] != '\0') {
-        if(!isdigit(test[j])) return 0;
+        if(!isdigit(test[j])) return ret;
         j++;
     };
-    return 1;
+    return (ret+1);
 }
 
 /*
@@ -1064,7 +1065,7 @@ hdr_hvals(HiRedis::Driver obj, ...)
         RETVAL
         
 SV*
-hdr_hgetall(HiRedis::Driver obj, ...)
+hdr__hgetall(HiRedis::Driver obj, ...)
     INIT:
         HDR_CNT_ARG_OR_UNDEF(1);
     CODE:
