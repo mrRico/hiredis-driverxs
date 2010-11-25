@@ -2,7 +2,7 @@ Changes
 Makefile.PL
 MANIFEST
 ppport.h
-README
+README.pod
 t/HiRedis-Driver.t
 lib/HiRedis/Driver.pm
 Driver.xs
